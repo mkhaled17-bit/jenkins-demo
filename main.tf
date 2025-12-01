@@ -2,20 +2,12 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# 1. Get the Default VPC
+# 1. Get the existing Default VPC
 data "aws_vpc" "default" {
   default = true
 }
 
-# 2. Get ALL available subnets in that VPC (Plural)
-data "aws_subnets" "all" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-# 3. Get the latest Amazon Linux 2 AMI
+# 2. Get the latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
   owners      = ["amazon"]
@@ -23,6 +15,19 @@ data "aws_ami" "amazon_linux" {
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+# 3. CREATE a new Subnet in the Default VPC
+# (Since your default subnets are missing, we create one)
+resource "aws_subnet" "my_subnet" {
+  vpc_id                  = data.aws_vpc.default.id
+  cidr_block              = "172.31.128.0/24" # A range usually safe in default VPCs
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "Jenkins-Demo-Subnet"
   }
 }
 
@@ -58,11 +63,10 @@ resource "aws_security_group" "web_sg" {
 resource "aws_instance" "web_server" {
   ami             = data.aws_ami.amazon_linux.id
   instance_type   = "t2.micro"
-  security_groups = [aws_security_group.web_sg.name]
-
-  # DYNAMICALLY PICK THE FIRST AVAILABLE SUBNET
-  # We convert the list of IDs to a set/list and grab the first one [0]
-  subnet_id = tolist(data.aws_subnets.all.ids)[0]
+  security_groups = [aws_security_group.web_sg.id] # Using ID is safer here
+  
+  # Connect to the subnet we created above
+  subnet_id       = aws_subnet.my_subnet.id
 
   user_data = <<-EOF
               #!/bin/bash
@@ -71,7 +75,7 @@ resource "aws_instance" "web_server" {
               systemctl start httpd
               systemctl enable httpd
               
-              # IMDSv2 (Secure) method to get Private IP
+              # IMDSv2 method to get Private IP
               TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
               PRIVATE_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
               
