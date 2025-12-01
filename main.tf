@@ -2,40 +2,72 @@ provider "aws" {
   region = "us-east-1"
 }
 
-# 1. Get the existing Default VPC
-data "aws_vpc" "default" {
-  default = true
-}
+# --- 1. Network Resources for 192.168.x.x ---
 
-# 2. Get the latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+# Create the new VPC using the 192.168.0.0/16 range
+resource "aws_vpc" "custom_vpc" {
+  cidr_block = "192.168.0.0/16"
+  enable_dns_support = true
+  enable_dns_hostnames = true
+  tags = {
+    Name = "Jenkins-Demo-VPC"
   }
 }
 
-# 3. CREATE a new Subnet in the Default VPC
+# Create the Internet Gateway (IGW) for public traffic
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.custom_vpc.id
+  tags = {
+    Name = "Jenkins-Demo-GW"
+  }
+}
+
+# Create the Route Table to route traffic through the IGW
+resource "aws_route_table" "route_table" {
+  vpc_id = aws_vpc.custom_vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+  tags = {
+    Name = "Jenkins-Demo-Route"
+  }
+}
+
+# Create the Subnet using your desired CIDR
 resource "aws_subnet" "my_subnet" {
-  vpc_id                  = data.aws_vpc.default.id
-  cidr_block              = "192.168.0.0/16" 
-  # REMOVED strict availability_zone pinning. 
-  # This allows AWS to pick a zone (a, b, c, etc.) that works for the instance type.
-  map_public_ip_on_launch = true
+  vpc_id                  = aws_vpc.custom_vpc.id
+  cidr_block              = "192.168.0.0/24" # Your desired CIDR
+  map_public_ip_on_launch = true # Required for public IP address
 
   tags = {
     Name = "Jenkins-Demo-Subnet"
   }
 }
 
-# 4. Security Group
+# Associate the Route Table with the new Subnet
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.my_subnet.id
+  route_table_id = aws_route_table.route_table.id
+}
+
+# --- 2. Compute Resources ---
+
+# Get the latest Amazon Linux 2 AMI (data source is reused)
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+# Security Group (must be linked to the new VPC)
 resource "aws_security_group" "web_sg" {
   name        = "web_server_sg"
   description = "Allow HTTP and SSH"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = aws_vpc.custom_vpc.id # Link to the new custom VPC
 
   ingress {
     from_port   = 80
@@ -43,14 +75,12 @@ resource "aws_security_group" "web_sg" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -59,15 +89,12 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-# 5. EC2 Instance
+# EC2 Instance
 resource "aws_instance" "web_server" {
   ami             = data.aws_ami.amazon_linux.id
-  
-  # CHANGE: Switched from t2.micro to t3.micro (Newer Free Tier)
   instance_type   = "t3.micro"
-  
   security_groups = [aws_security_group.web_sg.id]
-  subnet_id       = aws_subnet.my_subnet.id
+  subnet_id       = aws_subnet.my_subnet.id # Link to the new subnet
 
   user_data = <<-EOF
               #!/bin/bash
