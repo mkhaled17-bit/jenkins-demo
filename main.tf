@@ -21,7 +21,7 @@ data "aws_ami" "amazon_linux" {
 # 3. CREATE a new Subnet in the Default VPC
 resource "aws_subnet" "my_subnet" {
   vpc_id                  = data.aws_vpc.default.id
-  cidr_block              = "192.168.0.0/24" 
+  cidr_block              = "192.168.0.0/16" 
   # REMOVED strict availability_zone pinning. 
   # This allows AWS to pick a zone (a, b, c, etc.) that works for the instance type.
   map_public_ip_on_launch = true
