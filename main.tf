@@ -19,11 +19,11 @@ data "aws_ami" "amazon_linux" {
 }
 
 # 3. CREATE a new Subnet in the Default VPC
-# (Since your default subnets are missing, we create one)
 resource "aws_subnet" "my_subnet" {
   vpc_id                  = data.aws_vpc.default.id
-  cidr_block              = "172.31.128.0/24" # A range usually safe in default VPCs
-  availability_zone       = "us-east-1a"
+  cidr_block              = "172.31.128.0/24" 
+  # REMOVED strict availability_zone pinning. 
+  # This allows AWS to pick a zone (a, b, c, etc.) that works for the instance type.
   map_public_ip_on_launch = true
 
   tags = {
@@ -62,10 +62,11 @@ resource "aws_security_group" "web_sg" {
 # 5. EC2 Instance
 resource "aws_instance" "web_server" {
   ami             = data.aws_ami.amazon_linux.id
-  instance_type   = "t2.micro"
-  security_groups = [aws_security_group.web_sg.id] # Using ID is safer here
   
-  # Connect to the subnet we created above
+  # CHANGE: Switched from t2.micro to t3.micro (Newer Free Tier)
+  instance_type   = "t3.micro"
+  
+  security_groups = [aws_security_group.web_sg.id]
   subnet_id       = aws_subnet.my_subnet.id
 
   user_data = <<-EOF
