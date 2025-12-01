@@ -1,6 +1,11 @@
 pipeline {
     agent any
     
+// 1. Add a dropdown menu to choose "apply" or "destroy"
+    parameters {
+        choice(name: 'ACTION', choices: ['apply', 'destroy'], description: 'Choose whether to Create or Destroy infrastructure')
+    }
+
     stages {
         // ... (Checkout stage goes here) ...
 
