@@ -108,7 +108,7 @@ resource "aws_instance" "web_server" {
               PRIVATE_IP=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
               
               echo "<html><body>" > /var/www/html/index.html
-              echo "<h1>Created by: Khaled</h1>" >> /var/www/html/index.html
+              echo "<h1>Hello from Khaled</h1>" >> /var/www/html/index.html
               echo "<p>My Private IP is: $PRIVATE_IP</p>" >> /var/www/html/index.html
               echo "</body></html>" >> /var/www/html/index.html
               EOF
