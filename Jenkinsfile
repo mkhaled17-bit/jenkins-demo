@@ -1,15 +1,10 @@
 pipeline {
-    agent any
-
-    // 1. Dropdown menu to choose the action
-    parameters {
-        choice(name: 'ACTION', choices: ['apply', 'destroy'], description: 'Choose Action')
+    agent {
+        docker {
+            image 'hashicorp/terraform:latest' // Or a specific version
+            // Other options like args, registryUrl, etc.
+        }
     }
-
-    environment {
-        AWS_DEFAULT_REGION = 'us-east-1'
-    }
-
     stages {
         stage('Checkout') {
             steps {
